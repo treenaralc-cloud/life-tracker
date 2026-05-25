@@ -126,13 +126,11 @@ export default function DashboardPage() {
           await addXp(-50)
         } else {
           await updateScheduleLogStatus(item.log.id, newStatus)
-          const { leveledUp, newLevel } = await addXp(50)
-          if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+          await addXp(50)
         }
       } else {
         await insertScheduleLog(item.routine.id, item.dateStr, newStatus)
-        const { leveledUp, newLevel } = await addXp(50)
-        if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+        await addXp(50)
       }
       loadData()
     } else if (item.type === 'one_off') {
@@ -140,8 +138,7 @@ export default function DashboardPage() {
       const newStatus = isDone ? 'pending' : 'done'
       await updateOneOffTaskStatus(item.task.id, newStatus)
       if (newStatus === 'done') {
-        const { leveledUp, newLevel } = await addXp(20)
-        if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+        await addXp(20)
       } else {
         await addXp(-20)
       }
@@ -445,7 +442,7 @@ export default function DashboardPage() {
                 style={{
                   padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                   background: filter === f ? 'var(--accent)' : 'var(--bg-surface)',
-                  color: filter === f ? '#fff' : 'var(--text-2)'
+                  color: filter === f ? '#fff' : '#cbd5e1'
                 }}
               >
                 {f}
@@ -476,10 +473,10 @@ export default function DashboardPage() {
         <div className="modal-backdrop" onClick={() => setSelectedTaskAction(null)}>
           <div className="modal-content animate-in" onClick={e => e.stopPropagation()} style={{ padding: 24, borderRadius: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 18 }}>
+              <h3 style={{ margin: 0, fontSize: 18, color: '#fff' }}>
                 {selectedTaskAction.type === 'routine' ? selectedTaskAction.routine.name : selectedTaskAction.task?.title}
               </h3>
-              <button className="btn btn-ghost" onClick={() => setSelectedTaskAction(null)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setSelectedTaskAction(null)} style={{ color: '#fff', fontSize: 20 }}>✕</button>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -508,7 +505,7 @@ export default function DashboardPage() {
                     {selectedTaskAction.type === 'routine' && (
                       <button 
                         className="btn btn-ghost" 
-                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'var(--bg-surface)' }}
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'var(--bg-surface)', color: '#fff' }}
                         onClick={() => {
                           navigate('/log', { state: { routine: selectedTaskAction.routine, dateStr: selectedTaskAction.dateStr } })
                         }}
