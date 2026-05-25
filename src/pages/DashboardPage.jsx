@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus } from '../utils/db'
-import { format } from 'date-fns'
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from 'date-fns'
 import { th } from 'date-fns/locale'
 import QuickLogModal from '../components/QuickLogModal'
+import AddEventModal from '../components/AddEventModal'
 
 const CATS = [
   { key: 'workout', icon: '🏋️', label: 'เวทเทรนนิ่ง', color: '#38bdf8', unit: 'วัน' },
@@ -43,16 +44,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [agendaTasks, setAgendaTasks] = useState([])
   const [selectedTask, setSelectedTask] = useState(null)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [showAddModal, setShowAddModal] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedDate])
 
   async function loadData() {
     try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd')
-      const todayDayOfWeek = new Date().getDay()
+      const selectedStr = format(selectedDate, 'yyyy-MM-dd')
+      const selectedDayOfWeek = selectedDate.getDay()
 
       const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff] = await Promise.all([
         getWeeklyStats(),
@@ -62,8 +65,8 @@ export default function DashboardPage() {
         getGolfLogs(7),
         getStudyLogs(7),
         getRoutines(),
-        getScheduleLogs(todayStr, todayStr),
-        getOneOffTasksByDateRange(todayStr, todayStr)
+        getScheduleLogs(selectedStr, selectedStr),
+        getOneOffTasksByDateRange(selectedStr, selectedStr)
       ])
       setStats(s)
       setStreak(str)
@@ -71,15 +74,15 @@ export default function DashboardPage() {
       // Build Agenda Tasks
       const scheduled = fetchedRoutines.filter(r => {
         if (!r.is_active) return false
-        if (!r.days_of_week.includes(todayDayOfWeek)) return false
-        if (r.date_start && todayStr < r.date_start) return false
-        if (r.date_end && todayStr > r.date_end) return false
+        if (!r.days_of_week.includes(selectedDayOfWeek)) return false
+        if (r.date_start && selectedStr < r.date_start) return false
+        if (r.date_end && selectedStr > r.date_end) return false
         return true
       }).map(r => ({
         type: 'routine',
         routine: r,
-        log: fetchedLogs.find(l => l.routine_id === r.id && l.scheduled_date === todayStr) || null,
-        dateStr: todayStr
+        log: fetchedLogs.find(l => l.routine_id === r.id && l.scheduled_date === selectedStr) || null,
+        dateStr: selectedStr
       }))
 
       const mappedOneOff = (fetchedOneOff || []).map(t => ({
@@ -139,35 +142,49 @@ export default function DashboardPage() {
 
       {/* Today's Agenda */}
       <div className="agenda-section" style={{ marginBottom: 24, background: 'var(--bg-surface)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--border-md)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            📌 ต้องทำวันนี้ (Agenda)
-          </h2>
+        
+        {/* Horizontal Date Selector */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, marginBottom: 16, borderBottom: '1px solid var(--border-md)' }}>
+          {(() => {
+            // Generate dates for current week
+            const start = startOfWeek(new Date(), { weekStartsOn: 1 }) // Monday
+            const dates = eachDayOfInterval({ start, end: addDays(start, 6) })
+            return dates.map((date, idx) => {
+              const isSelected = isSameDay(date, selectedDate)
+              const isToday = isSameDay(date, new Date())
+              return (
+                <div 
+                  key={idx}
+                  onClick={() => setSelectedDate(date)}
+                  style={{
+                    minWidth: 50, padding: '8px 4px', textAlign: 'center', borderRadius: 12, cursor: 'pointer', flexShrink: 0,
+                    background: isSelected ? 'var(--accent)' : isToday ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: isSelected ? '#fff' : 'var(--text-2)'
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>{format(date, 'EEE', { locale: th })}</div>
+                  <div style={{ fontSize: 16, fontWeight: isSelected || isToday ? 'bold' : 'normal' }}>{format(date, 'd')}</div>
+                </div>
+              )
+            })
+          })()}
         </div>
 
-        <form 
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const title = e.target.elements.taskTitle.value.trim()
-            if (!title) return
-            e.target.elements.taskTitle.value = ''
-            await import('../utils/db').then(m => m.addOneOffTask({ title, task_date: format(new Date(), 'yyyy-MM-dd') }))
-            loadData()
-          }}
-          style={{ display: 'flex', gap: 8, marginBottom: 16 }}
-        >
-          <input 
-            name="taskTitle"
-            className="form-input" 
-            placeholder="เพิ่มงานพิเศษวันนี้ เช่น ไปหาหมอ..." 
-            style={{ flex: 1, padding: '8px 12px', fontSize: 14 }}
-            autoComplete="off"
-          />
-          <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px' }}>+</button>
-        </form>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            📌 ต้องทำวันที่ {format(selectedDate, 'd MMM', { locale: th })}
+          </h2>
+          <button 
+            className="btn btn-primary btn-sm" 
+            onClick={() => setShowAddModal(true)}
+            style={{ borderRadius: 20 }}
+          >
+            + เพิ่มงาน/นัดหมาย
+          </button>
+        </div>
 
         {agendaTasks.length === 0 ? (
-          <div style={{ color: 'var(--text-3)', fontSize: 14 }}>วันนี้ไม่มีตารางกิจกรรมพักผ่อนได้เต็มที่เลยค่ะ! 🌸</div>
+          <div style={{ color: 'var(--text-3)', fontSize: 14 }}>ไม่มีตารางกิจกรรมพักผ่อนได้เต็มที่เลยค่ะ! 🌸</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {agendaTasks.map((item, idx) => {
@@ -283,6 +300,17 @@ export default function DashboardPage() {
           onUpdate={() => {
             loadData()
             setSelectedTask(null)
+          }}
+        />
+      )}
+
+      {showAddModal && (
+        <AddEventModal 
+          selectedDate={selectedDate}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => {
+            setShowAddModal(false)
+            loadData()
           }}
         />
       )}
