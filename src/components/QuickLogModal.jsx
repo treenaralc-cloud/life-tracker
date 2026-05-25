@@ -20,8 +20,16 @@ export default function QuickLogModal({ task, onClose, onUpdate }) {
       const { supabase } = await import('../utils/supabase')
       const { data: { user } } = await supabase.auth.getUser()
       
+      const { addXp } = await import('../utils/db')
+      
       if (task.log?.id) {
         await updateScheduleLogStatus(task.log.id, status, note)
+        if (task.log.status === 'done' && status !== 'done') {
+          await addXp(-50)
+        } else if (task.log.status !== 'done' && status === 'done') {
+          const { leveledUp, newLevel } = await addXp(50)
+          if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+        }
       } else {
         await supabase.from('schedule_logs').insert({
           user_id: user.id,
@@ -31,14 +39,31 @@ export default function QuickLogModal({ task, onClose, onUpdate }) {
           quick_note: note,
           completed_at: status === 'done' ? new Date().toISOString() : null
         })
+        if (status === 'done') {
+          const { leveledUp, newLevel } = await addXp(50)
+          if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+        }
       }
       
-      if (status === 'done') {
-        const { addXp } = await import('../utils/db')
-        const { leveledUp, newLevel } = await addXp(50)
-        if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+      onUpdate()
+    } catch (err) {
+      console.error(err)
+      alert(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteLog = async () => {
+    if (!task.log?.id) return
+    if (!window.confirm('ยกเลิกบันทึกกิจกรรมนี้ใช่ไหม?')) return
+    setLoading(true)
+    try {
+      const { deleteScheduleLog, addXp } = await import('../utils/db')
+      await deleteScheduleLog(task.log.id)
+      if (task.log.status === 'done') {
+        await addXp(-50)
       }
-      
       onUpdate()
     } catch (err) {
       console.error(err)
@@ -100,12 +125,25 @@ export default function QuickLogModal({ task, onClose, onUpdate }) {
 
         <hr style={{ borderColor: 'var(--border-md)', margin: '16px 0' }} />
 
-        <button 
-          className="btn btn-secondary btn-full"
-          onClick={handleFullLog}
-        >
-          📝 กรอกแบบละเอียด (บันทึกลงสมุด)
-        </button>
+          <button 
+            className="btn btn-secondary btn-full"
+            onClick={handleFullLog}
+            style={{ marginBottom: 8 }}
+          >
+            📄 กรอกแบบละเอียด (บันทึกข้อมูล)
+          </button>
+
+          {task.log?.id && (
+            <button 
+              className="btn btn-ghost btn-full"
+              style={{ color: '#ef4444' }}
+              onClick={handleDeleteLog}
+              disabled={loading}
+            >
+              🗑️ ยกเลิกบันทึก (รีเซ็ต)
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -381,6 +381,11 @@ export const updateScheduleLogStatus = async (id, status, quick_note = null) => 
   if (error) throw error
 }
 
+export const deleteScheduleLog = async (id) => {
+  const { error } = await supabase.from('schedule_logs').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ──────────────────────────────────────────
 // PHASE 2: EXERCISE LIBRARY
 // ──────────────────────────────────────────

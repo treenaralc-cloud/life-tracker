@@ -238,25 +238,41 @@ export default function DashboardPage() {
                 const isDone = item.task.status === 'done'
                 return (
                   <div key={idx} 
-                    onClick={async () => {
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', padding: 12, borderRadius: 8, cursor: 'pointer',
+                      opacity: isDone ? 0.6 : 1, borderLeft: `4px solid #a855f7`
+                    }}>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }} onClick={async () => {
                       const newStatus = isDone ? 'pending' : 'done'
                       await updateOneOffTaskStatus(item.task.id, newStatus)
                       if (newStatus === 'done') {
                         const { leveledUp, newLevel } = await addXp(20)
                         if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+                      } else {
+                        await addXp(-20)
                       }
                       loadData()
-                    }}
-                    style={{ 
-                      display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', padding: 12, borderRadius: 8, cursor: 'pointer',
-                      opacity: isDone ? 0.6 : 1, borderLeft: `4px solid #a855f7`
                     }}>
-                    <div style={{ fontSize: 20 }}>📝</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 15, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none' }}>{item.task.title}</div>
-                      {item.task.task_time && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>⏰ {item.task.task_time.substring(0,5)}</div>}
+                      <div style={{ fontSize: 20 }}>📝</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none' }}>{item.task.title}</div>
+                        {item.task.task_time && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>⏰ {item.task.task_time.substring(0,5)}</div>}
+                      </div>
+                      {isDone ? <div style={{ color: '#22c55e', fontSize: 14 }}>✓ ทำแล้ว</div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--border-md)' }} />}
                     </div>
-                    {isDone ? <div style={{ color: '#22c55e', fontSize: 14 }}>✓ ทำแล้ว</div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--border-md)' }} />}
+                    <button 
+                      className="btn btn-ghost" 
+                      style={{ padding: '4px 8px', color: '#ef4444' }}
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        if (window.confirm('ลบงานนี้?')) {
+                          await deleteOneOffTask(item.task.id)
+                          loadData()
+                        }
+                      }}
+                    >
+                      🗑️
+                    </button>
                   </div>
                 )
               }
