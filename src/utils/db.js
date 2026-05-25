@@ -539,3 +539,52 @@ export const addXp = async (amount) => {
   if (error) throw error
   return { newXp, newLevel, leveledUp: newLevel > stats.current_level }
 }
+
+// ──────────────────────────────────────────
+// PHASE 3: PROGRESS PHOTOS
+// ──────────────────────────────────────────
+
+export const uploadProgressPhoto = async (file, notes) => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const fileExt = file.name.split('.').pop()
+  const fileName = `${user.id}/${Math.random()}.${fileExt}`
+  const filePath = `${fileName}`
+  
+  const { error: uploadError } = await supabase.storage
+    .from('progress_photos')
+    .upload(filePath, file)
+    
+  if (uploadError) throw uploadError
+  
+  const { data: { publicUrl } } = supabase.storage
+    .from('progress_photos')
+    .getPublicUrl(filePath)
+    
+  const { error: dbError } = await supabase.from('progress_photos').insert({
+    user_id: user.id,
+    photo_url: publicUrl,
+    notes,
+    date: new Date().toISOString().split('T')[0]
+  })
+  if (dbError) throw dbError
+}
+
+export const getProgressPhotos = async () => {
+  const { data, error } = await supabase
+    .from('progress_photos')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export const deleteProgressPhoto = async (id, photo_url) => {
+  // Extract path from public URL
+  const urlParts = photo_url.split('/')
+  const fileName = urlParts[urlParts.length - 1]
+  const userId = urlParts[urlParts.length - 2]
+  const filePath = `${userId}/${fileName}`
+  
+  await supabase.storage.from('progress_photos').remove([filePath])
+  await supabase.from('progress_photos').delete().eq('id', id)
+}

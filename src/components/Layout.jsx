@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/history',   icon: '📋', label: 'ประวัติ' },
   { to: '/analytics', icon: '📊', label: 'วิเคราะห์' },
   { to: '/goals',     icon: '🎯', label: 'เป้าหมาย' },
+  { to: '/gallery',   icon: '📸', label: 'รูปภาพ' },
 ]
 
 export default function Layout() {

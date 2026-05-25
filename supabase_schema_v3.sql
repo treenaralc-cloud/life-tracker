@@ -86,3 +86,21 @@ create policy "Users can manage their own data" on progress_photos for all using
 create policy "Users can manage their own data" on goal_subtasks for all using (
   goal_id in (select id from weekly_goals where user_id = auth.uid())
 );
+
+-- =============================================
+-- STORAGE BUCKETS (Progress Photos)
+-- =============================================
+insert into storage.buckets (id, name, public) values ('progress_photos', 'progress_photos', false)
+on conflict (id) do nothing;
+
+create policy "Users can upload their own photos"
+  on storage.objects for insert
+  with check ( bucket_id = 'progress_photos' and auth.uid()::text = (storage.foldername(name))[1] );
+
+create policy "Users can view their own photos"
+  on storage.objects for select
+  using ( bucket_id = 'progress_photos' and auth.uid()::text = (storage.foldername(name))[1] );
+
+create policy "Users can delete their own photos"
+  on storage.objects for delete
+  using ( bucket_id = 'progress_photos' and auth.uid()::text = (storage.foldername(name))[1] );

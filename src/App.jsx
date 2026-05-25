@@ -9,6 +9,7 @@ import AnalyticsPage from './pages/AnalyticsPage'
 import GoalsPage    from './pages/GoalsPage'
 import SchedulePage from './pages/SchedulePage'
 import RoutineManagerPage from './pages/RoutineManagerPage'
+import ProgressGalleryPage from './pages/ProgressGalleryPage'
 import './index.css'
 
 function ProtectedRoute({ children }) {
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="history"   element={<HistoryPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="goals"     element={<GoalsPage />} />
+            <Route path="gallery"   element={<ProgressGalleryPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
