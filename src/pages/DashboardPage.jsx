@@ -41,6 +41,7 @@ export default function DashboardPage() {
   
   const [showAddModal, setShowAddModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [selectedTaskAction, setSelectedTaskAction] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => { loadData() }, [selectedDate])
@@ -193,9 +194,11 @@ export default function DashboardPage() {
           }
 
           return (
-            <div key={idx} style={{ 
+            <div key={idx} 
+              onClick={() => setSelectedTaskAction(item)}
+              style={{ 
               display: 'flex', alignItems: 'center', background: isDone ? 'rgba(255,255,255,0.03)' : 'var(--bg-surface)', 
-              padding: '16px', borderRadius: 24, gap: 16, transition: 'all 0.2s',
+              padding: '16px', borderRadius: 24, gap: 16, transition: 'all 0.2s', cursor: 'pointer',
               borderLeft: `6px solid ${isDone ? 'var(--text-4)' : color}`,
               opacity: isDone ? 0.6 : 1
             }}>
@@ -210,45 +213,12 @@ export default function DashboardPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {isDone ? (
-                  <button 
-                    onClick={() => handleToggleItem(item)} 
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 28, padding: 0 }}
-                  >
-                    ✅
-                  </button>
+                  <div style={{ fontSize: 24, color: 'var(--text-3)' }}>✅</div>
                 ) : (
-                  <button 
-                    onClick={() => handleToggleItem(item)} 
-                    style={{ 
-                      width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', 
-                      color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', 
-                      alignItems: 'center', justifyContent: 'center', fontSize: 24, padding: 0 
+                  <div style={{ 
+                      width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--text-3)' 
                     }}
-                  >
-                    +
-                  </button>
-                )}
-                
-                {item.type === 'routine' && (
-                  <button 
-                    onClick={() => navigate('/log', { state: { routine: item.routine, dateStr: item.dateStr } })}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}
-                  >
-                    ✏️
-                  </button>
-                )}
-                {item.type === 'one_off' && (
-                  <button 
-                    onClick={async () => {
-                      if (window.confirm('ลบงานนี้?')) {
-                        await deleteOneOffTask(item.task.id)
-                        loadData()
-                      }
-                    }}
-                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}
-                  >
-                    🗑️
-                  </button>
+                  />
                 )}
               </div>
             </div>
@@ -453,6 +423,84 @@ export default function DashboardPage() {
 
       {showAddModal && <AddEventModal onClose={() => setShowAddModal(false)} onAdded={loadData} selectedDate={selectedDate} />}
       {showSettingsModal && <SettingsModal onClose={() => setShowSettingsModal(false)} />}
+      
+      {/* Action Modal */}
+      {selectedTaskAction && (
+        <div className="modal-backdrop" onClick={() => setSelectedTaskAction(null)}>
+          <div className="modal-content animate-in" onClick={e => e.stopPropagation()} style={{ padding: 24, borderRadius: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>
+                {selectedTaskAction.type === 'routine' ? selectedTaskAction.routine.name : selectedTaskAction.task?.title}
+              </h3>
+              <button className="btn btn-ghost" onClick={() => setSelectedTaskAction(null)}>✕</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(() => {
+                const isDone = selectedTaskAction.type === 'routine' 
+                  ? selectedTaskAction.log?.status === 'done' 
+                  : selectedTaskAction.task?.status === 'done';
+
+                return (
+                  <>
+                    {!isDone ? (
+                      <button 
+                        className="btn btn-primary" 
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16 }}
+                        onClick={() => {
+                          handleToggleItem(selectedTaskAction)
+                          setSelectedTaskAction(null)
+                        }}
+                      >
+                        ✅ แค่บันทึกว่าทำเสร็จแล้ว
+                      </button>
+                    ) : (
+                      <button 
+                        className="btn btn-ghost" 
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
+                        onClick={() => {
+                          handleToggleItem(selectedTaskAction)
+                          setSelectedTaskAction(null)
+                        }}
+                      >
+                        🗑️ ยกเลิกการทำ (ลบประวัติ)
+                      </button>
+                    )}
+
+                    {selectedTaskAction.type === 'routine' && (
+                      <button 
+                        className="btn btn-ghost" 
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'var(--bg-surface)' }}
+                        onClick={() => {
+                          navigate('/log', { state: { routine: selectedTaskAction.routine, dateStr: selectedTaskAction.dateStr } })
+                        }}
+                      >
+                        ✏️ ใส่รายละเอียดแบบเต็ม
+                      </button>
+                    )}
+                    
+                    {selectedTaskAction.type === 'one_off' && (
+                      <button 
+                        className="btn btn-ghost" 
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'var(--bg-surface)', color: '#ef4444' }}
+                        onClick={async () => {
+                          if (window.confirm('ลบงานนี้ถาวร?')) {
+                            await deleteOneOffTask(selectedTaskAction.task.id)
+                            loadData()
+                            setSelectedTaskAction(null)
+                          }
+                        }}
+                      >
+                        🗑️ ลบงานนี้ถาวร
+                      </button>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
