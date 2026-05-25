@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getOrCreateWeeklyGoal, updateWeeklyGoal, getWeeklyStats } from '../utils/db'
+import { getOrCreateWeeklyGoal, updateWeeklyGoal, getWeeklyStats, getGoalSubtasks, addGoalSubtask, updateGoalSubtaskStatus, deleteGoalSubtask } from '../utils/db'
 import { format, startOfWeek } from 'date-fns'
 import { th } from 'date-fns/locale'
 
@@ -14,8 +14,10 @@ const GOAL_ITEMS = [
 export default function GoalsPage() {
   const [goal, setGoal]   = useState(null)
   const [stats, setStats] = useState(null)
+  const [subtasks, setSubtasks] = useState([])
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({})
+  const [newSubtask, setNewSubtask] = useState('')
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(true)
@@ -28,7 +30,8 @@ export default function GoalsPage() {
   async function loadData() {
     try {
       const [g, s] = await Promise.all([getOrCreateWeeklyGoal(), getWeeklyStats()])
-      setGoal(g); setStats(s); setDraft({ ...g })
+      const st = await getGoalSubtasks(g.id)
+      setGoal(g); setStats(s); setDraft({ ...g }); setSubtasks(st)
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }
@@ -144,6 +147,86 @@ export default function GoalsPage() {
           </div>
           <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 8 }}>
             ทำสำเร็จ {GOAL_ITEMS.filter(item => getProgress(item).pct >= 100).length} / {GOAL_ITEMS.length} เป้าหมาย
+          </div>
+        </div>
+      )}
+
+      {/* Subtasks Section */}
+      {!editing && goal && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 24 }}>🎯</span>
+            <h3 style={{ margin: 0 }}>ซอยเป้าหมาย (Subtasks)</h3>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>ตั้งเป้าหมายย่อยๆ เพื่อให้บรรลุเป้าหมายหลักได้ง่ายขึ้น</p>
+          
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (!newSubtask.trim()) return
+              await addGoalSubtask(goal.id, newSubtask.trim())
+              setNewSubtask('')
+              loadData()
+            }}
+            style={{ display: 'flex', gap: 8, marginBottom: 16 }}
+          >
+            <input 
+              className="form-input" 
+              style={{ flex: 1 }}
+              placeholder="เช่น ซื้อเวย์โปรตีน, ซักชุดกีฬา..." 
+              value={newSubtask}
+              onChange={e => setNewSubtask(e.target.value)}
+            />
+            <button type="submit" className="btn btn-primary" style={{ padding: '0 16px' }}>เพิ่ม</button>
+          </form>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {subtasks.map(st => {
+              const isDone = st.status === 'done'
+              return (
+                <div key={st.id} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 12, 
+                  background: 'var(--bg-base)', padding: '12px 16px', borderRadius: 'var(--radius)',
+                  opacity: isDone ? 0.6 : 1
+                }}>
+                  <div 
+                    onClick={async () => {
+                      await updateGoalSubtaskStatus(st.id, isDone ? 'pending' : 'done')
+                      loadData()
+                    }}
+                    style={{ 
+                      width: 22, height: 22, borderRadius: '50%', 
+                      border: `2px solid ${isDone ? '#22c55e' : 'var(--border-md)'}`,
+                      background: isDone ? '#22c55e' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', flexShrink: 0
+                    }}
+                  >
+                    {isDone && <span style={{ color: '#fff', fontSize: 14 }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1, fontSize: 14, textDecoration: isDone ? 'line-through' : 'none' }}>
+                    {st.title}
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      if (window.confirm('ลบเป้าหมายย่อยนี้?')) {
+                        await deleteGoalSubtask(st.id)
+                        loadData()
+                      }
+                    }}
+                    className="btn btn-ghost" 
+                    style={{ padding: 4, color: '#ef4444' }}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )
+            })}
+            {subtasks.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)', fontSize: 13 }}>
+                ยังไม่มีเป้าหมายย่อยค่ะ
+              </div>
+            )}
           </div>
         </div>
       )}

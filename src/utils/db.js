@@ -588,3 +588,40 @@ export const deleteProgressPhoto = async (id, photo_url) => {
   await supabase.storage.from('progress_photos').remove([filePath])
   await supabase.from('progress_photos').delete().eq('id', id)
 }
+
+// ──────────────────────────────────────────
+// PHASE 3: GOAL SUBTASKS
+// ──────────────────────────────────────────
+
+export const getGoalSubtasks = async (goalId) => {
+  const { data, error } = await supabase
+    .from('goal_subtasks')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('created_at')
+  if (error) throw error
+  return data
+}
+
+export const addGoalSubtask = async (goalId, title) => {
+  const { error } = await supabase
+    .from('goal_subtasks')
+    .insert({ goal_id: goalId, title })
+  if (error) throw error
+}
+
+export const updateGoalSubtaskStatus = async (id, status) => {
+  const { error } = await supabase
+    .from('goal_subtasks')
+    .update({ status, completed_at: status === 'done' ? new Date().toISOString() : null })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export const deleteGoalSubtask = async (id) => {
+  const { error } = await supabase
+    .from('goal_subtasks')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
