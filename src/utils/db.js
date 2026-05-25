@@ -324,7 +324,28 @@ export const getAllLogs = async (limit = 30) => {
     ...combine(stretch, 'stretch'),
     ...combine(sleep, 'sleep'),
     ...combine(body, 'body'),
-  ].sort((a, b) => new Date(b.date) - new Date(a.date))
+  ]
+  return allLogs.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, limit)
+}
+
+export const deleteLogRecord = async (type, id) => {
+  const tableMap = {
+    workout: 'workout_sessions',
+    cardio: 'cardio_logs',
+    golf: 'golf_logs',
+    study: 'study_logs',
+    stretch: 'stretching_logs',
+    sleep: 'sleep_logs',
+    body: 'body_measurements'
+  }
+  const table = tableMap[type]
+  if (!table) throw new Error(`Unknown log type: ${type}`)
+
+  const { error } = await supabase.from(table).delete().eq('id', id)
+  if (error) throw error
+  
+  // Deduct some standard XP for removing a full log
+  await addXp(-50)
 }
 
 // ──────────────────────────────────────────
@@ -397,6 +418,7 @@ export const getScheduleLogs = async (startDate, endDate) => {
     .select('*, routines(*, routine_items(*))')
     .gte('scheduled_date', startDate)
     .lte('scheduled_date', endDate)
+    .limit(5000)
   if (error) throw error
   return data
 }

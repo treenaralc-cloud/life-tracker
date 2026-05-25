@@ -52,18 +52,21 @@ export default function DashboardPage() {
       const selectedStr = format(selectedDate, 'yyyy-MM-dd')
       const selectedDayOfWeek = selectedDate.getDay()
 
-      // Fetch month logs for Tracker view and Weekly Stats
-      const monthStartStr = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-      const monthEndStr = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+      // Fetch year logs for Tracker view and Weekly Stats
+      const today = new Date()
+      const yearStart = new Date(today)
+      yearStart.setDate(yearStart.getDate() - 365)
+      const yearStartStr = format(yearStart, 'yyyy-MM-dd')
+      const yearEndStr = format(today, 'yyyy-MM-dd')
 
-      const [s, str, fetchedRoutines, dailyOneOff, icalUrl, gStats, fetchedMonthlyLogs] = await Promise.all([
+      const [s, str, fetchedRoutines, dailyOneOff, icalUrl, gStats, fetchedYearlyLogs] = await Promise.all([
         getWeeklyStats(),
         getStreak(),
         getRoutines(),
         getOneOffTasksByDateRange(selectedStr, selectedStr),
         getIcalUrl(),
         getGamificationStats(),
-        getScheduleLogs(monthStartStr, monthEndStr)
+        getScheduleLogs(yearStartStr, yearEndStr)
       ])
       
       const calEvents = await fetchCalendarEvents(icalUrl, selectedStr, selectedStr)
@@ -72,10 +75,10 @@ export default function DashboardPage() {
       setStreak(str)
       setGameStats(gStats)
       setRoutines(fetchedRoutines)
-      setMonthlyLogs(fetchedMonthlyLogs || [])
+      setMonthlyLogs(fetchedYearlyLogs || [])
 
       // Find logs specifically for selected date
-      const dailyLogs = (fetchedMonthlyLogs || []).filter(l => l.scheduled_date === selectedStr)
+      const dailyLogs = (fetchedYearlyLogs || []).filter(l => l.scheduled_date === selectedStr)
 
       // Build Agenda Tasks
       const scheduled = fetchedRoutines.filter(r => {
@@ -195,7 +198,14 @@ export default function DashboardPage() {
 
           return (
             <div key={idx} 
-              onClick={() => setSelectedTaskAction(item)}
+              onClick={() => {
+                if (isDone) {
+                  // Immediate revert
+                  handleToggleItem(item)
+                } else {
+                  setSelectedTaskAction(item)
+                }
+              }}
               style={{ 
               display: 'flex', alignItems: 'center', background: isDone ? 'rgba(255,255,255,0.03)' : 'var(--bg-surface)', 
               padding: '16px', borderRadius: 24, gap: 16, transition: 'all 0.2s', cursor: 'pointer',
@@ -205,18 +215,18 @@ export default function DashboardPage() {
               <div style={{ fontSize: 28, opacity: isDone ? 0.5 : 1 }}>{icon}</div>
               
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 16, textDecoration: isDone ? 'line-through' : 'none' }}>
+                <div style={{ fontWeight: 600, fontSize: 16, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#94a3b8' : '#fff' }}>
                   {title}
                 </div>
-                {subtitle && <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>{subtitle}</div>}
+                {subtitle && <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>{subtitle}</div>}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {isDone ? (
-                  <div style={{ fontSize: 24, color: 'var(--text-3)' }}>✅</div>
+                  <div style={{ fontSize: 24, color: '#94a3b8' }}>✅</div>
                 ) : (
                   <div style={{ 
-                      width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--text-3)' 
+                      width: 24, height: 24, borderRadius: '50%', border: '2px solid #94a3b8' 
                     }}
                   />
                 )}
@@ -228,74 +238,111 @@ export default function DashboardPage() {
     )
   }
 
-  function renderTracker() {
-    // Generate dates for current week
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 })
-    const weekDates = eachDayOfInterval({ start, end: addDays(start, 6) })
+  function generateHeatmap(routine, allLogs) {
+    const weeks = []
+    const today = new Date()
+    today.setHours(0,0,0,0)
+    
+    // Backtrack 52 weeks (364 days).
+    const startDay = new Date(today)
+    startDay.setDate(startDay.getDate() - 363)
+    
+    for (let w = 0; w < 52; w++) {
+      const weekDays = []
+      for (let d = 0; d < 7; d++) {
+         const date = new Date(startDay)
+         date.setDate(date.getDate() + (w * 7) + d)
+         
+         const dStr = format(date, 'yyyy-MM-dd')
+         const log = allLogs.find(l => l.routine_id === routine.id && l.scheduled_date === dStr && l.status === 'done')
+         
+         weekDays.push({
+           date: date,
+           isDone: !!log,
+           isActiveDay: routine.days_of_week.includes(date.getDay())
+         })
+      }
+      weeks.push(weekDays)
+    }
+    
+    // Calculate stats
+    const totalDone = allLogs.filter(l => l.routine_id === routine.id && l.status === 'done').length
+    const totalActiveDays = weeks.flat().filter(d => d.isActiveDay && d.date <= today).length
+    const percent = totalActiveDays ? Math.round((totalDone / totalActiveDays) * 100) : 0
+    
+    // Streak calculation
+    let currentStreak = 0
+    let streakBroken = false
+    const flatDays = weeks.flat().reverse() // Newest to oldest
+    
+    for (const d of flatDays) {
+      if (d.date > today) continue
+      if (d.isActiveDay) {
+        if (d.isDone) {
+          currentStreak++
+        } else {
+          // If it's today and not done yet, we don't break the streak immediately
+          if (format(d.date, 'yyyy-MM-dd') !== format(today, 'yyyy-MM-dd')) {
+            streakBroken = true
+            break
+          }
+        }
+      }
+    }
+    
+    return { weeks, totalDone, percent, streak: currentStreak }
+  }
 
+  function renderTracker() {
     return (
       <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         
-        {/* Weekly Grid */}
-        <div style={{ background: 'var(--bg-surface)', padding: '20px 16px', borderRadius: 24 }}>
-          <h2 style={{ fontSize: 18, marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            📅 ตารางสัปดาห์นี้
-          </h2>
-          
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 400, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', paddingBottom: 16, color: 'var(--text-3)', fontWeight: 500 }}>Habit</th>
-                  {weekDates.map(d => (
-                    <th key={d.toISOString()} style={{ paddingBottom: 16, color: isSameDay(d, new Date()) ? 'var(--accent)' : 'var(--text-3)', fontWeight: 500, width: 40 }}>
-                      <div style={{ fontSize: 12 }}>{format(d, 'EEE')}</div>
-                      <div style={{ fontSize: 14 }}>{format(d, 'd')}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {routines.map(r => {
-                  const meta = CATS.find(c => c.key === r.category)
-                  return (
-                    <tr key={r.id}>
-                      <td style={{ padding: '12px 0', borderTop: '1px solid var(--border-md)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>{meta?.icon}</span>
-                          <span style={{ fontSize: 14, fontWeight: 500 }}>{r.name}</span>
-                        </div>
-                      </td>
-                      {weekDates.map(d => {
-                        const dStr = format(d, 'yyyy-MM-dd')
-                        const log = monthlyLogs.find(l => l.routine_id === r.id && l.scheduled_date === dStr)
-                        const isDone = log?.status === 'done'
-                        // Check if this routine is active on this day
-                        const isActiveDay = r.days_of_week.includes(d.getDay())
-                        
-                        return (
-                          <td key={d.toISOString()} style={{ padding: '12px 0', borderTop: '1px solid var(--border-md)', textAlign: 'center' }}>
-                            {isActiveDay ? (
-                              <div style={{ 
-                                width: 24, height: 24, margin: '0 auto', borderRadius: 6,
-                                background: isDone ? (meta?.color || 'var(--accent)') : 'rgba(255,255,255,0.05)',
-                                border: isDone ? 'none' : '1px solid var(--border-md)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                              }}>
-                                {isDone && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
-                              </div>
-                            ) : (
-                              <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--border-md)', margin: '0 auto' }} />
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        {/* Heatmap Section */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {routines.map(r => {
+             const meta = CATS.find(c => c.key === r.category)
+             const { weeks, percent, streak } = generateHeatmap(r, monthlyLogs)
+             
+             return (
+               <div key={r.id} style={{ background: 'var(--bg-surface)', padding: 20, borderRadius: 24, border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                       <span style={{ fontSize: 24 }}>{meta?.icon}</span>
+                       <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{r.name}</span>
+                     </div>
+                     <div style={{ display: 'flex', gap: 12, fontSize: 13, fontWeight: 600 }}>
+                       <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 16 }}>📈</span> {percent}%
+                       </span>
+                       <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 16 }}>🔥</span> {streak}d
+                       </span>
+                     </div>
+                  </div>
+                  
+                  {/* Heatmap Grid */}
+                  <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
+                    {weeks.map((week, wIdx) => (
+                      <div key={wIdx} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                         {week.map((day, dIdx) => (
+                           <div key={dIdx} 
+                             title={`${format(day.date, 'd MMM yyyy')}${day.isDone ? ' (ทำแล้ว)' : ''}`}
+                             style={{ 
+                               width: 12, height: 12, borderRadius: 3, flexShrink: 0,
+                               background: day.isDone ? (meta?.color || 'var(--accent)') : (day.isActiveDay ? 'rgba(255,255,255,0.05)' : 'transparent'),
+                               opacity: day.isDone ? 1 : 0.8
+                             }} 
+                           />
+                         ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', textAlign: 'right', marginTop: 8 }}>
+                    ประวัติ 365 วันล่าสุด (สไลด์ดูได้)
+                  </div>
+               </div>
+             )
+          })}
         </div>
 
         {/* Gamification Banner */}
@@ -441,9 +488,11 @@ export default function DashboardPage() {
                   ? selectedTaskAction.log?.status === 'done' 
                   : selectedTaskAction.task?.status === 'done';
 
+                // We only show this modal if NOT done, based on new logic.
+                // But just in case, we'll keep the revert button logic if it somehow opens when done.
                 return (
                   <>
-                    {!isDone ? (
+                    {!isDone && (
                       <button 
                         className="btn btn-primary" 
                         style={{ padding: '16px', borderRadius: 16, fontSize: 16 }}
@@ -452,18 +501,7 @@ export default function DashboardPage() {
                           setSelectedTaskAction(null)
                         }}
                       >
-                        ✅ แค่บันทึกว่าทำเสร็จแล้ว
-                      </button>
-                    ) : (
-                      <button 
-                        className="btn btn-ghost" 
-                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}
-                        onClick={() => {
-                          handleToggleItem(selectedTaskAction)
-                          setSelectedTaskAction(null)
-                        }}
-                      >
-                        🗑️ ยกเลิกการทำ (ลบประวัติ)
+                        ✅ ทำเสร็จแล้ว
                       </button>
                     )}
 
@@ -482,7 +520,7 @@ export default function DashboardPage() {
                     {selectedTaskAction.type === 'one_off' && (
                       <button 
                         className="btn btn-ghost" 
-                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'var(--bg-surface)', color: '#ef4444' }}
+                        style={{ padding: '16px', borderRadius: 16, fontSize: 16, background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}
                         onClick={async () => {
                           if (window.confirm('ลบงานนี้ถาวร?')) {
                             await deleteOneOffTask(selectedTaskAction.task.id)
@@ -491,7 +529,7 @@ export default function DashboardPage() {
                           }
                         }}
                       >
-                        🗑️ ลบงานนี้ถาวร
+                        🗑️ ลบงาน/กิจกรรมนี้ทิ้ง
                       </button>
                     )}
                   </>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getAllLogs } from '../utils/db'
+import { getAllLogs, deleteLogRecord } from '../utils/db'
 import { format, parseISO } from 'date-fns'
 import { th } from 'date-fns/locale'
 
@@ -59,6 +59,18 @@ export default function HistoryPage() {
     ? logs.filter(l => l._type === TAB_TO_TYPE[tab])
     : logs
 
+  async function handleDelete(log) {
+    if (window.confirm('คุณต้องการลบประวัติกิจกรรมนี้ใช่ไหม?')) {
+      try {
+        await deleteLogRecord(log._type, log.id)
+        loadLogs()
+      } catch (err) {
+        console.error(err)
+        alert('เกิดข้อผิดพลาดในการลบ')
+      }
+    }
+  }
+
   return (
     <div className="animate-in">
       <div className="page-header">
@@ -91,16 +103,24 @@ export default function HistoryPage() {
               <div key={log.id || i} id={`history-item-${i}`} className="timeline-item animate-in" style={{ '--cat-color': meta.color, animationDelay: `${i * 0.03}s` }}>
                 <div className="timeline-icon">{meta.icon}</div>
                 <div className="timeline-body">
-                  <div className="timeline-title">{meta.label}</div>
+                  <div className="timeline-title" style={{ color: '#fff' }}>{meta.label}</div>
                   {summary && (
                     <div className="timeline-meta">
-                      <span>{summary}</span>
+                      <span style={{ color: '#cbd5e1' }}>{summary}</span>
                     </div>
                   )}
-                  {log.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, fontStyle: 'italic' }}>"{log.notes}"</div>}
+                  {log.notes && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontStyle: 'italic' }}>"{log.notes}"</div>}
                 </div>
-                <div className="timeline-date">
-                  {format(parseISO(log.date), 'd MMM', { locale: th })}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                  <div className="timeline-date" style={{ color: '#94a3b8' }}>
+                    {format(parseISO(log.date), 'd MMM', { locale: th })}
+                  </div>
+                  <button 
+                    onClick={() => handleDelete(log)}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#ef4444', fontSize: 16 }}
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             )
