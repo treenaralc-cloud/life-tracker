@@ -534,7 +534,7 @@ export const addXp = async (amount) => {
   const { error } = await supabase
     .from('gamification_stats')
     .update({ xp_points: newXp, current_level: newLevel })
-    .eq('id', stats.id)
+    .eq('user_id', stats.user_id)
     
   if (error) throw error
   return { newXp, newLevel, leveledUp: newLevel > stats.current_level }
