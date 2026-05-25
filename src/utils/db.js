@@ -413,6 +413,22 @@ export const updateScheduleLogStatus = async (id, status, quick_note = null) => 
   if (error) throw error
 }
 
+export const insertScheduleLog = async (routine_id, scheduled_date, status = 'done') => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('schedule_logs')
+    .insert({
+      user_id: user.id,
+      routine_id,
+      scheduled_date,
+      status,
+      completed_at: status === 'done' ? new Date().toISOString() : null
+    })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
 export const deleteScheduleLog = async (id) => {
   const { error } = await supabase.from('schedule_logs').delete().eq('id', id)
   if (error) throw error
