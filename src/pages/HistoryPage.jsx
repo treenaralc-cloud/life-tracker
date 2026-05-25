@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getAllLogs, deleteLogRecord } from '../utils/db'
 import { format, parseISO } from 'date-fns'
 import { th } from 'date-fns/locale'
@@ -41,6 +42,7 @@ function getSummary(log) {
 }
 
 export default function HistoryPage() {
+  const navigate = useNavigate()
   const [logs, setLogs]     = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab]       = useState('ทั้งหมด')
@@ -115,12 +117,22 @@ export default function HistoryPage() {
                   <div className="timeline-date" style={{ color: '#94a3b8' }}>
                     {format(parseISO(log.date), 'd MMM', { locale: th })}
                   </div>
-                  <button 
-                    onClick={() => handleDelete(log)}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#ef4444', fontSize: 16 }}
-                  >
-                    🗑️
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button 
+                      onClick={() => navigate('/log', { state: { editLog: log, editType: log._type } })}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#60a5fa', fontSize: 16 }}
+                      title="แก้ไข"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(log)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#ef4444', fontSize: 16 }}
+                      title="ลบ"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
             )

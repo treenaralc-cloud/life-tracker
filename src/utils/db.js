@@ -700,3 +700,62 @@ export const deleteGoalSubtask = async (id) => {
     .eq('id', id)
   if (error) throw error
 }
+
+// ──────────────────────────────────────────
+// PHASE 5: HISTORY EDITING
+// ──────────────────────────────────────────
+
+export const updateWorkoutSession = async (id, date, notes, exercises) => {
+  const { data: session, error } = await supabase
+    .from('workout_sessions')
+    .update({ date, notes })
+    .eq('id', id)
+    .select().single()
+  if (error) throw error
+
+  // Simple replace approach for exercises
+  await supabase.from('workout_exercises').delete().eq('session_id', id)
+  
+  if (exercises && exercises.length > 0) {
+    const rows = exercises.map(e => ({ session_id: id, ...e }))
+    const { error: exErr } = await supabase.from('workout_exercises').insert(rows)
+    if (exErr) throw exErr
+  }
+  return session
+}
+
+export const updateCardioLog = async (id, payload) => {
+  const { data, error } = await supabase.from('cardio_logs').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export const updateGolfLog = async (id, payload) => {
+  const { data, error } = await supabase.from('golf_logs').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export const updateStudyLog = async (id, payload) => {
+  const { data, error } = await supabase.from('study_logs').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export const updateStretchingLog = async (id, payload) => {
+  const { data, error } = await supabase.from('stretching_logs').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export const updateSleepLog = async (id, payload) => {
+  const { data, error } = await supabase.from('sleep_logs').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export const updateBodyMeasurement = async (id, payload) => {
+  const { data, error } = await supabase.from('body_measurements').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}

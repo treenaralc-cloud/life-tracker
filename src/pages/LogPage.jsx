@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { addWorkoutSession, addCardioLog, addGolfLog, addStudyLog, addStretchingLog, addSleepLog, addBodyMeasurement } from '../utils/db'
+import { addWorkoutSession, addCardioLog, addGolfLog, addStudyLog, addStretchingLog, addSleepLog, addBodyMeasurement, updateWorkoutSession, updateCardioLog, updateGolfLog, updateStudyLog, updateStretchingLog, updateSleepLog, updateBodyMeasurement } from '../utils/db'
 import { format } from 'date-fns'
 import ExerciseAutocomplete from '../components/ExerciseAutocomplete'
 
@@ -24,7 +24,7 @@ const STUDY_SOURCES = ['หนังสือ','YouTube','Coursera/Udemy','Podca
 function WorkoutForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate]     = useState(initialState?.dateStr || today)
-  const [notes, setNotes]   = useState('')
+  const [notes, setNotes]   = useState(initialState?.notes || '')
   const [exercises, setEx]  = useState(initialState?.exercises || [newExercise()])
   const [loading, setLoading] = useState(false)
   const [error, setError]   = useState('')
@@ -65,7 +65,8 @@ function WorkoutForm({ onSuccess, initialState }) {
           reps: parseInt(s.reps) || 0,
         })),
       }))
-      await addWorkoutSession(date, notes, exData)
+      if (initialState?.id) await updateWorkoutSession(initialState.id, date, notes, exData)
+      else await addWorkoutSession(date, notes, exData)
       onSuccess('บันทึกเวทเทรนนิ่งเรียบร้อยแล้วค่ะ! 💪')
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -146,9 +147,9 @@ function WorkoutForm({ onSuccess, initialState }) {
 }
 
 // ──────────────── Cardio Form ────────────────
-function CardioForm({ onSuccess }) {
+function CardioForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const [f, setF] = useState({ date: today, type: 'วิ่ง', duration_minutes: '', distance_km: '', calories: '', notes: '' })
+  const [f, setF] = useState(initialState || { date: today, type: 'วิ่ง', duration_minutes: '', distance_km: '', calories: '', notes: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -157,7 +158,11 @@ function CardioForm({ onSuccess }) {
   async function handleSubmit(e) {
     e.preventDefault(); setError(''); setLoading(true)
     try {
-      await addCardioLog({ ...f, duration_minutes: parseInt(f.duration_minutes), distance_km: f.distance_km ? parseFloat(f.distance_km) : null, calories: f.calories ? parseInt(f.calories) : null })
+      const payload = {
+        date: f.date,
+        notes: f.notes, date: f.date, type: f.type, duration_minutes: parseInt(f.duration_minutes), distance_km: f.distance_km ? parseFloat(f.distance_km) : null, calories: f.calories ? parseInt(f.calories) : null, notes: f.notes };
+      if (initialState?.id) await updateCardioLog(initialState.id, payload);
+      else await addCardioLog(payload);
       onSuccess('บันทึกคาร์ดิโอเรียบร้อยค่ะ! 🏃')
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -204,9 +209,9 @@ function CardioForm({ onSuccess }) {
 }
 
 // ──────────────── Golf Form ────────────────
-function GolfForm({ onSuccess }) {
+function GolfForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const [f, setF] = useState({ date: today, location: '', session_type: 'Driving Range', duration_minutes: '', notes: '' })
+  const [f, setF] = useState(initialState || { date: today, location: '', session_type: 'Driving Range', duration_minutes: '', notes: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -214,7 +219,9 @@ function GolfForm({ onSuccess }) {
   async function handleSubmit(e) {
     e.preventDefault(); setError(''); setLoading(true)
     try {
-      await addGolfLog({ ...f, duration_minutes: f.duration_minutes ? parseInt(f.duration_minutes) : null })
+      const payload = { date: f.date, location: f.location, session_type: f.session_type, duration_minutes: f.duration_minutes ? parseInt(f.duration_minutes) : null, notes: f.notes };
+      if (initialState?.id) await updateGolfLog(initialState.id, payload);
+      else await addGolfLog(payload);
       onSuccess('บันทึกการซ้อมกอล์ฟเรียบร้อยค่ะ! ⛳')
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -257,7 +264,7 @@ function GolfForm({ onSuccess }) {
 }
 
 // ──────────────── Study Form ────────────────
-function StudyForm({ onSuccess }) {
+function StudyForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [f, setF] = useState({ date: today, subject: '', duration_minutes: '', source: 'YouTube', notes: '' })
   const [loading, setLoading] = useState(false)
@@ -267,7 +274,9 @@ function StudyForm({ onSuccess }) {
   async function handleSubmit(e) {
     e.preventDefault(); setError(''); setLoading(true)
     try {
-      await addStudyLog({ ...f, duration_minutes: parseInt(f.duration_minutes) })
+      const payload = { date: f.date, subject: f.subject, duration_minutes: parseInt(f.duration_minutes), source: f.source, notes: f.notes };
+      if (initialState?.id) await updateStudyLog(initialState.id, payload);
+      else await addStudyLog(payload);
       onSuccess('บันทึกการเรียนเรียบร้อยค่ะ! 📚')
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -310,7 +319,7 @@ function StudyForm({ onSuccess }) {
 }
 
 // ──────────────── Stretch Form ────────────────
-function StretchForm({ onSuccess }) {
+function StretchForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [f, setF] = useState({ date: today, duration_minutes: '', type: 'Static', notes: '' })
   const [selectedMuscles, setMuscles] = useState([])
@@ -378,7 +387,7 @@ function StretchForm({ onSuccess }) {
 }
 
 // ──────────────── Sleep Form ────────────────
-function SleepForm({ onSuccess }) {
+function SleepForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [f, setF] = useState({ date: today, sleep_time: '23:00', wake_time: '07:00', notes: '' })
   const [quality, setQuality] = useState(0)
@@ -451,7 +460,7 @@ function SleepForm({ onSuccess }) {
 }
 
 // ──────────────── Body Form ────────────────
-function BodyForm({ onSuccess }) {
+function BodyForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [f, setF] = useState({ date: today, weight_kg: '', body_fat_percent: '', waist_cm: '', notes: '' })
   const [loading, setLoading] = useState(false)
@@ -518,11 +527,14 @@ const FORM_MAP = {
 
 export default function LogPage() {
   const location = useLocation()
-  const [selected, setSelected] = useState(location.state?.routine?.category || null)
+  const isEditMode = !!location.state?.editLog
+  const [selected, setSelected] = useState(location.state?.editType || location.state?.routine?.category || null)
   const [success, setSuccess]   = useState('')
 
   useEffect(() => {
-    if (location.state?.routine?.category) {
+    if (location.state?.editType) {
+      setSelected(location.state.editType)
+    } else if (location.state?.routine?.category) {
       setSelected(location.state.routine.category)
     }
   }, [location.state])
@@ -538,7 +550,41 @@ export default function LogPage() {
   
   // Format initial state for the form if coming from Schedule
   let formInitialState = null
-  if (location.state?.routine && location.state.routine.category === selected) {
+  if (location.state?.editLog) {
+    const editLog = location.state.editLog
+    if (selected === 'workout') {
+       formInitialState = {
+         id: editLog.id,
+         dateStr: editLog.date,
+         exercises: editLog.workout_exercises?.map(e => ({
+            name: e.exercise_name,
+            muscle: e.muscle_group || '',
+            sets: e.sets || [{weight: '', reps: ''}]
+         })) || [{name: '', muscle: '', sets: [{weight: '', reps: ''}]}],
+         notes: editLog.notes || ''
+       }
+    } else {
+       formInitialState = { ...editLog }
+       if (formInitialState.date) formInitialState.dateStr = formInitialState.date
+       if (selected === 'sleep') formInitialState.quality = String(formInitialState.quality || '3')
+       if (selected === 'body') {
+          ['weight_kg', 'body_fat_percent', 'muscle_mass_kg', 'waist_cm'].forEach(k => {
+             if (formInitialState[k] !== null && formInitialState[k] !== undefined) formInitialState[k] = String(formInitialState[k])
+             else formInitialState[k] = ''
+          })
+       }
+       if (selected === 'cardio') {
+          ['duration_minutes', 'distance_km', 'calories'].forEach(k => {
+             if (formInitialState[k] !== null && formInitialState[k] !== undefined) formInitialState[k] = String(formInitialState[k])
+             else formInitialState[k] = ''
+          })
+       }
+       if (selected === 'golf' || selected === 'study' || selected === 'stretch') {
+          if (formInitialState.duration_minutes !== null && formInitialState.duration_minutes !== undefined) formInitialState.duration_minutes = String(formInitialState.duration_minutes)
+          else formInitialState.duration_minutes = ''
+       }
+    }
+  } else if (location.state?.routine && location.state.routine.category === selected) {
     const routine = location.state.routine
     if (routine.category === 'workout') {
       formInitialState = {
@@ -573,8 +619,11 @@ export default function LogPage() {
         </div>
       ) : (
         <div>
-          <button id="back-to-cats" className="btn btn-secondary btn-sm" style={{ marginBottom: 20 }} onClick={() => setSelected(null)}>
-            ← กลับ
+          <button id="back-to-cats" className="btn btn-secondary btn-sm" style={{ marginBottom: 20 }} onClick={() => {
+              if (isEditMode) window.history.back()
+              else setSelected(null)
+            }}>
+            {isEditMode ? '✕ ยกเลิกแก้ไข' : '← กลับ'}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, padding: '12px 16px', background: `rgba(255,255,255,0.04)`, borderRadius: 'var(--radius)', borderLeft: `3px solid ${cat?.color}` }}>
