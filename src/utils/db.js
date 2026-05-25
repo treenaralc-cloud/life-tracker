@@ -194,21 +194,53 @@ export const getWeeklyStats = async () => {
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
-  const [workouts, cardio, golf, study, stretch] = await Promise.all([
+  const [workouts, cardio, golf, study, stretch, schedules] = await Promise.all([
     supabase.from('workout_sessions').select('date').gte('date', weekStart).lte('date', weekEnd),
     supabase.from('cardio_logs').select('date,duration_minutes').gte('date', weekStart).lte('date', weekEnd),
     supabase.from('golf_logs').select('date').gte('date', weekStart).lte('date', weekEnd),
     supabase.from('study_logs').select('date,duration_minutes').gte('date', weekStart).lte('date', weekEnd),
     supabase.from('stretching_logs').select('date').gte('date', weekStart).lte('date', weekEnd),
+    supabase.from('schedule_logs').select('scheduled_date, routines(category)').eq('status', 'done').gte('scheduled_date', weekStart).lte('scheduled_date', weekEnd)
+  ])
+
+  // Combine full logs with quick logs (schedule_logs)
+  const quickLogs = schedules.data || []
+  
+  const wDays = new Set([
+    ...(workouts.data?.map(r => r.date) || []),
+    ...quickLogs.filter(s => s.routines?.category === 'workout').map(s => s.scheduled_date)
+  ])
+  
+  const cDays = new Set([
+    ...(cardio.data?.map(r => r.date) || []),
+    ...quickLogs.filter(s => s.routines?.category === 'cardio').map(s => s.scheduled_date)
+  ])
+
+  const gDays = new Set([
+    ...(golf.data?.map(r => r.date) || []),
+    ...quickLogs.filter(s => s.routines?.category === 'golf').map(s => s.scheduled_date)
+  ])
+
+  const stDays = new Set([
+    ...(stretch.data?.map(r => r.date) || []),
+    ...quickLogs.filter(s => s.routines?.category === 'stretch').map(s => s.scheduled_date)
+  ])
+
+  const studyDays = new Set([
+    ...(study.data?.map(r => r.date) || []),
+    ...quickLogs.filter(s => s.routines?.category === 'study').map(s => s.scheduled_date)
   ])
 
   return {
-    workout_days: new Set(workouts.data?.map(r => r.date)).size,
-    cardio_sessions: cardio.data?.length || 0,
+    workout_days: wDays.size,
+    cardio_sessions: cDays.size,
     cardio_minutes: cardio.data?.reduce((s, r) => s + (r.duration_minutes || 0), 0) || 0,
-    golf_sessions: golf.data?.length || 0,
+    golf_sessions: gDays.size,
+    // Study is tracked in hours, quick logs don't have duration, but if they logged it quick, maybe add 0.5 hour? 
+    // Or just use the full logs for duration. If they want to track hours, they must use full logs. We'll use full logs + quick logs * 0.5 hr as an approximation if needed.
+    // Actually, GoalsPage uses study_hours. Let's just use full log duration. Quick logs don't give hours.
     study_hours: Math.round((study.data?.reduce((s, r) => s + (r.duration_minutes || 0), 0) || 0) / 60 * 10) / 10,
-    stretch_days: new Set(stretch.data?.map(r => r.date)).size,
+    stretch_days: stDays.size,
   }
 }
 

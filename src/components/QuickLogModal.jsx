@@ -143,7 +143,6 @@ export default function QuickLogModal({ task, onClose, onUpdate }) {
               🗑️ ยกเลิกบันทึก (รีเซ็ต)
             </button>
           )}
-        </div>
       </div>
     </div>
   )
