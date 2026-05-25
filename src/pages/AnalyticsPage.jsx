@@ -6,6 +6,8 @@ import {
 import { supabase } from '../utils/supabase'
 import { format, subDays, subMonths, eachWeekOfInterval, startOfWeek, endOfWeek } from 'date-fns'
 import { th } from 'date-fns/locale'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import ReactMarkdown from 'react-markdown'
 
 const RANGES = [
   { label: '1 สัปดาห์', days: 7 },
@@ -35,6 +37,10 @@ export default function AnalyticsPage() {
   const [studyData, setStudyData] = useState([])
   const [loading, setLoading]   = useState(true)
   const [totals, setTotals]     = useState({})
+
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiAdvice, setAiAdvice] = useState('')
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || '')
 
   useEffect(() => { loadData() }, [range])
 
@@ -92,6 +98,37 @@ export default function AnalyticsPage() {
     setLoading(false)
   }
 
+  const askAI = async () => {
+    if (!apiKey) {
+      alert('กรุณาระบุ Gemini API Key ก่อนค่ะ')
+      return
+    }
+    setAiLoading(true)
+    setAiAdvice('')
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const prompt = `ในฐานะโค้ชส่วนตัว (AI Weekly Coach) ชื่อน้องน้ำเพชร ที่มีความกระตือรือร้นและน่ารัก กรุณาวิเคราะห์ข้อมูลสุขภาพและการทำกิจกรรมของฉันในช่วง ${range} วันที่ผ่านมา และให้คำแนะนำที่นำไปใช้ได้จริง สั้นๆ กระชับ และเป็นข้อๆ
+
+ข้อมูลสรุป ${range} วันที่ผ่านมา:
+- วันที่ออกกำลังกาย (เวทเทรนนิ่ง): ${totals.workoutDays} วัน
+- เวลาคาร์ดิโอรวม: ${totals.cardioMin} นาที
+- ซ้อมกอล์ฟ: ${totals.golfSessions} ครั้ง
+- เวลาเรียน/พัฒนาตัวเองรวม: ${totals.studyHours} ชม.
+- วันที่ยืดเหยียด: ${totals.stretchDays} วัน
+
+วิเคราะห์จุดแข็ง จุดที่ต้องระวัง และให้เป้าหมายในสัปดาห์ถัดไปแบบน่ารักๆ ค่ะ`
+
+      const result = await model.generateContent(prompt)
+      setAiAdvice(result.response.text())
+    } catch (err) {
+      console.error(err)
+      setAiAdvice('ขออภัยค่ะ เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI (ตรวจสอบ API Key หรือลองใหม่อีกครั้ง)')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <div className="animate-in">
       <div className="page-header">
@@ -112,6 +149,57 @@ export default function AnalyticsPage() {
         <div className="loading-center"><div className="spinner" /></div>
       ) : (
         <>
+          {/* AI Weekly Coach */}
+          <div className="chart-card" style={{ marginBottom: 24, background: 'var(--bg-card)', border: '1px solid #6366f1' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ fontSize: 32 }}>🤖</div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, color: '#6366f1' }}>AI Weekly Coach (น้องน้ำเพชร)</h3>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>ให้ AI ช่วยวิเคราะห์ผลลัพธ์และให้คำแนะนำ</p>
+              </div>
+            </div>
+
+            {!apiKey && (
+              <div style={{ marginBottom: 16 }}>
+                <input 
+                  type="password"
+                  className="form-input" 
+                  placeholder="ใส่ Gemini API Key ที่นี่ (ถ้าไม่มีใน .env)" 
+                  value={apiKey} 
+                  onChange={e => setApiKey(e.target.value)} 
+                />
+              </div>
+            )}
+
+            {!aiAdvice && !aiLoading && (
+              <button className="btn btn-primary btn-full" onClick={askAI}>
+                ✨ ขอคำแนะนำจาก AI
+              </button>
+            )}
+
+            {aiLoading && (
+              <div style={{ textAlign: 'center', padding: 20 }}>
+                <div className="spinner" style={{ margin: '0 auto 12px' }} />
+                <div style={{ color: 'var(--text-3)', fontSize: 14 }}>น้องน้ำเพชรกำลังวิเคราะห์ข้อมูล...</div>
+              </div>
+            )}
+
+            {aiAdvice && !aiLoading && (
+              <div style={{ 
+                background: 'rgba(99, 102, 241, 0.1)', 
+                padding: 16, 
+                borderRadius: 'var(--radius)',
+                fontSize: 14,
+                lineHeight: 1.6
+              }}>
+                <ReactMarkdown>{aiAdvice}</ReactMarkdown>
+                <button className="btn btn-secondary btn-full" style={{ marginTop: 16 }} onClick={askAI}>
+                  🔄 วิเคราะห์ใหม่
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Summary totals */}
           <div className="stat-grid" style={{ marginBottom: 24 }}>
             {[
