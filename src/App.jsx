@@ -7,6 +7,8 @@ import LogPage      from './pages/LogPage'
 import HistoryPage  from './pages/HistoryPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import GoalsPage    from './pages/GoalsPage'
+import SchedulePage from './pages/SchedulePage'
+import RoutineManagerPage from './pages/RoutineManagerPage'
 import './index.css'
 
 function ProtectedRoute({ children }) {
@@ -31,6 +33,8 @@ export default function App() {
             </ProtectedRoute>
           }>
             <Route index       element={<DashboardPage />} />
+            <Route path="schedule"  element={<SchedulePage />} />
+            <Route path="routines"  element={<RoutineManagerPage />} />
             <Route path="log"       element={<LogPage />} />
             <Route path="history"   element={<HistoryPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />

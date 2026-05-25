@@ -4,6 +4,8 @@ import { useEffect } from 'react'
 
 const NAV_ITEMS = [
   { to: '/',          icon: '🏠', label: 'หน้าหลัก' },
+  { to: '/schedule',  icon: '📅', label: 'ตาราง' },
+  { to: '/routines',  icon: '🔁', label: 'กิจวัตร' },
   { to: '/log',       icon: '➕', label: 'บันทึก' },
   { to: '/history',   icon: '📋', label: 'ประวัติ' },
   { to: '/analytics', icon: '📊', label: 'วิเคราะห์' },

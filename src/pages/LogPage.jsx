@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { addWorkoutSession, addCardioLog, addGolfLog, addStudyLog, addStretchingLog, addSleepLog, addBodyMeasurement } from '../utils/db'
 import { format } from 'date-fns'
+import ExerciseAutocomplete from '../components/ExerciseAutocomplete'
 
 const CATEGORIES = [
   { id: 'workout', icon: '🏋️', label: 'เวทเทรนนิ่ง', color: '#38bdf8' },
@@ -19,11 +21,11 @@ const STRETCH_TYPES = ['Static','Dynamic','Yoga','PNF','Pilates']
 const STUDY_SOURCES = ['หนังสือ','YouTube','Coursera/Udemy','Podcast','บทความ','สอนตัวเอง','อื่นๆ']
 
 // ──────────────── Workout Form ────────────────
-function WorkoutForm({ onSuccess }) {
+function WorkoutForm({ onSuccess, initialState }) {
   const today = format(new Date(), 'yyyy-MM-dd')
-  const [date, setDate]     = useState(today)
+  const [date, setDate]     = useState(initialState?.dateStr || today)
   const [notes, setNotes]   = useState('')
-  const [exercises, setEx]  = useState([newExercise()])
+  const [exercises, setEx]  = useState(initialState?.exercises || [newExercise()])
   const [loading, setLoading] = useState(false)
   const [error, setError]   = useState('')
 
@@ -87,7 +89,24 @@ function WorkoutForm({ onSuccess }) {
           {exercises.map((ex, ei) => (
             <div key={ei} className="exercise-item">
               <div className="exercise-header">
-                <input id={`ex-name-${ei}`} className="form-input exercise-name-input" placeholder="ชื่อท่า เช่น Bench Press" value={ex.name} onChange={e => updateEx(ei, 'name', e.target.value)} style={{ flex: 1, marginRight: 8 }} />
+                <ExerciseAutocomplete 
+                  value={ex.name} 
+                  onChange={(val) => updateEx(ei, 'name', val)}
+                  onSelect={(selectedEx) => {
+                    // Auto-fill muscle group and sets if available
+                    if (selectedEx.muscle_group) {
+                      updateEx(ei, 'muscle', selectedEx.muscle_group)
+                    }
+                    if (selectedEx.last_sets && selectedEx.last_sets.length > 0) {
+                      const copy = [...exercises]
+                      copy[ei].sets = selectedEx.last_sets.map(s => ({
+                        weight: s.weight_kg ? String(s.weight_kg) : '',
+                        reps: s.reps ? String(s.reps) : ''
+                      }))
+                      setEx(copy)
+                    }
+                  }}
+                />
                 <select id={`ex-muscle-${ei}`} className="form-select" value={ex.muscle} onChange={e => updateEx(ei, 'muscle', e.target.value)} style={{ width: 130, marginRight: 8 }}>
                   <option value="">กล้ามเนื้อ</option>
                   {MUSCLE_GROUPS.map(m => <option key={m}>{m}</option>)}
@@ -498,8 +517,15 @@ const FORM_MAP = {
 }
 
 export default function LogPage() {
-  const [selected, setSelected] = useState(null)
+  const location = useLocation()
+  const [selected, setSelected] = useState(location.state?.routine?.category || null)
   const [success, setSuccess]   = useState('')
+
+  useEffect(() => {
+    if (location.state?.routine?.category) {
+      setSelected(location.state.routine.category)
+    }
+  }, [location.state])
 
   function handleSuccess(msg) {
     setSuccess(msg)
@@ -509,6 +535,23 @@ export default function LogPage() {
 
   const FormComponent = selected ? FORM_MAP[selected] : null
   const cat = CATEGORIES.find(c => c.id === selected)
+  
+  // Format initial state for the form if coming from Schedule
+  let formInitialState = null
+  if (location.state?.routine && location.state.routine.category === selected) {
+    const routine = location.state.routine
+    if (routine.category === 'workout') {
+      formInitialState = {
+        dateStr: location.state.dateStr,
+        exercises: routine.routine_items?.map(i => ({
+          name: i.item_name,
+          muscle: i.muscle_group || '',
+          sets: i.default_sets?.length > 0 ? i.default_sets.map(s => ({ weight: s.weight_kg || '', reps: s.reps || '' })) : [{ weight: '', reps: '' }]
+        })) || [{ name: '', muscle: '', sets: [{ weight: '', reps: '' }] }]
+      }
+    }
+    // Note: Other categories can be pre-filled here if needed in the future
+  }
 
   return (
     <div className="animate-in">
@@ -539,7 +582,7 @@ export default function LogPage() {
             <span style={{ fontWeight: 700, color: cat?.color }}>{cat?.label}</span>
           </div>
 
-          <FormComponent onSuccess={handleSuccess} />
+          <FormComponent onSuccess={handleSuccess} initialState={formInitialState} />
         </div>
       )}
     </div>

@@ -29,6 +29,11 @@ export const addWorkoutSession = async (date, notes, exercises) => {
     const rows = exercises.map(e => ({ session_id: session.id, ...e }))
     const { error: exErr } = await supabase.from('workout_exercises').insert(rows)
     if (exErr) throw exErr
+    
+    // Auto-update exercise library (fire and forget)
+    Promise.all(exercises.map(e => 
+      upsertExerciseInLibrary(e.exercise_name, e.muscle_group, e.sets)
+    )).catch(err => console.error('Failed to update exercise library', err))
   }
   return session
 }
@@ -288,5 +293,141 @@ export const getAllLogs = async (limit = 30) => {
     ...combine(sleep, 'sleep'),
     ...combine(body, 'body'),
   ].sort((a, b) => new Date(b.date) - new Date(a.date))
+}
+
+// ──────────────────────────────────────────
+// PHASE 2: ROUTINES & SCHEDULE
+// ──────────────────────────────────────────
+
+export const getRoutines = async () => {
+  const { data, error } = await supabase
+    .from('routines')
+    .select('*, routine_items(*)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export const createRoutine = async (routinePayload, itemsPayload) => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: routine, error } = await supabase
+    .from('routines')
+    .insert({ user_id: user.id, ...routinePayload })
+    .select().single()
+  
+  if (error) throw error
+  
+  if (itemsPayload && itemsPayload.length > 0) {
+    const items = itemsPayload.map((item, idx) => ({
+      routine_id: routine.id,
+      ...item,
+      sort_order: idx
+    }))
+    const { error: itemsError } = await supabase.from('routine_items').insert(items)
+    if (itemsError) throw itemsError
+  }
+  
+  return routine
+}
+
+export const updateRoutine = async (id, routinePayload, itemsPayload) => {
+  const { data: routine, error } = await supabase
+    .from('routines')
+    .update(routinePayload)
+    .eq('id', id)
+    .select().single()
+  
+  if (error) throw error
+
+  // Simple approach for items: delete all and recreate
+  await supabase.from('routine_items').delete().eq('routine_id', id)
+  
+  if (itemsPayload && itemsPayload.length > 0) {
+    const items = itemsPayload.map((item, idx) => ({
+      routine_id: id,
+      ...item,
+      sort_order: idx
+    }))
+    await supabase.from('routine_items').insert(items)
+  }
+  
+  return routine
+}
+
+export const deleteRoutine = async (id) => {
+  const { error } = await supabase.from('routines').delete().eq('id', id)
+  if (error) throw error
+}
+
+export const getScheduleLogs = async (startDate, endDate) => {
+  const { data, error } = await supabase
+    .from('schedule_logs')
+    .select('*, routines(*, routine_items(*))')
+    .gte('scheduled_date', startDate)
+    .lte('scheduled_date', endDate)
+  if (error) throw error
+  return data
+}
+
+export const updateScheduleLogStatus = async (id, status, quick_note = null) => {
+  const { error } = await supabase
+    .from('schedule_logs')
+    .update({ 
+      status, 
+      quick_note, 
+      completed_at: status === 'done' ? new Date().toISOString() : null 
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// ──────────────────────────────────────────
+// PHASE 2: EXERCISE LIBRARY
+// ──────────────────────────────────────────
+
+export const searchExercises = async (query = '') => {
+  let req = supabase.from('exercise_library').select('*')
+  if (query) {
+    req = req.ilike('exercise_name', `%${query}%`)
+  }
+  const { data, error } = await req.order('use_count', { ascending: false }).limit(20)
+  if (error) throw error
+  return data
+}
+
+export const upsertExerciseInLibrary = async (exercise_name, muscle_group, last_sets) => {
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  const { data: existing } = await supabase
+    .from('exercise_library')
+    .select('id, use_count')
+    .eq('user_id', user.id)
+    .eq('exercise_name', exercise_name)
+    .single()
+    
+  if (existing) {
+    const { error } = await supabase
+      .from('exercise_library')
+      .update({
+        muscle_group: muscle_group || null,
+        last_sets,
+        last_used: new Date().toISOString().split('T')[0],
+        use_count: existing.use_count + 1
+      })
+      .eq('id', existing.id)
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('exercise_library')
+      .insert({
+        user_id: user.id,
+        exercise_name,
+        muscle_group: muscle_group || null,
+        last_sets,
+        last_used: new Date().toISOString().split('T')[0],
+        use_count: 1
+      })
+    if (error) throw error
+  }
 }
 
