@@ -32,6 +32,13 @@ export default function QuickLogModal({ task, onClose, onUpdate }) {
           completed_at: status === 'done' ? new Date().toISOString() : null
         })
       }
+      
+      if (status === 'done') {
+        const { addXp } = await import('../utils/db')
+        const { leveledUp, newLevel } = await addXp(50)
+        if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+      }
+      
       onUpdate()
     } catch (err) {
       console.error(err)

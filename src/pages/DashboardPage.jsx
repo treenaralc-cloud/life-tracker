@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus, getIcalUrl, fetchCalendarEvents } from '../utils/db'
+import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus, getIcalUrl, fetchCalendarEvents, getGamificationStats, addXp } from '../utils/db'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from 'date-fns'
 import { th } from 'date-fns/locale'
 import QuickLogModal from '../components/QuickLogModal'
@@ -41,6 +41,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function DashboardPage() {
   const [stats, setStats]   = useState(null)
   const [streak, setStreak] = useState(0)
+  const [gameStats, setGameStats] = useState(null)
   const [chartData, setChartData] = useState([])
   const [loading, setLoading] = useState(true)
   const [agendaTasks, setAgendaTasks] = useState([])
@@ -59,7 +60,7 @@ export default function DashboardPage() {
       const selectedStr = format(selectedDate, 'yyyy-MM-dd')
       const selectedDayOfWeek = selectedDate.getDay()
 
-      const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff, icalUrl] = await Promise.all([
+      const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff, icalUrl, gStats] = await Promise.all([
         getWeeklyStats(),
         getStreak(),
         getWorkoutSessions(7),
@@ -69,13 +70,15 @@ export default function DashboardPage() {
         getRoutines(),
         getScheduleLogs(selectedStr, selectedStr),
         getOneOffTasksByDateRange(selectedStr, selectedStr),
-        getIcalUrl()
+        getIcalUrl(),
+        getGamificationStats()
       ])
       
       const calEvents = await fetchCalendarEvents(icalUrl, selectedStr, selectedStr)
       
       setStats(s)
       setStreak(str)
+      setGameStats(gStats)
 
       // Build Agenda Tasks
       const scheduled = fetchedRoutines.filter(r => {
@@ -238,6 +241,10 @@ export default function DashboardPage() {
                     onClick={async () => {
                       const newStatus = isDone ? 'pending' : 'done'
                       await updateOneOffTaskStatus(item.task.id, newStatus)
+                      if (newStatus === 'done') {
+                        const { leveledUp, newLevel } = await addXp(20)
+                        if (leveledUp) alert(`🎉 ยินดีด้วยบอส! เลเวลอัปเป็นระดับ ${newLevel} แล้ว!`)
+                      }
                       loadData()
                     }}
                     style={{ 
@@ -258,21 +265,32 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Streak Banner */}
-      <div className="streak-banner" style={{ marginBottom: 24 }}>
-        <div className="streak-fire">🔥</div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span className="streak-number">{streak}</span>
-            <span style={{ color: 'var(--text-2)', fontWeight: 600, fontSize: 16 }}>วัน</span>
+      {/* Gamification Banner */}
+      <div className="gamification-banner" style={{ marginBottom: 24, background: 'linear-gradient(135deg, #1e1b4b, #312e81)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid #4f46e5', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative', zIndex: 2 }}>
+          <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(45deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 'bold', color: '#fff', border: '3px solid #fff' }}>
+            {gameStats?.current_level || 1}
           </div>
-          <div className="streak-label">Workout Streak ติดต่อกัน</div>
-          {streak === 0 && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>เริ่มวันนี้เป็นวันแรกได้เลยค่ะ! 💪</div>}
-          {streak >= 7  && <div style={{ fontSize: 12, color: '#f97316', marginTop: 4 }}>🏆 ยอดเยี่ยมมากค่ะ!</div>}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 }}>
+              <div style={{ fontWeight: 'bold', fontSize: 16, color: '#fff' }}>ผู้เล่น: บอส</div>
+              <div style={{ fontSize: 12, color: '#cbd5e1' }}>{gameStats?.total_xp || 0} / {((gameStats?.current_level || 1)) * 100} XP</div>
+            </div>
+            <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${((gameStats?.total_xp || 0) % 100)}%`, height: '100%', background: '#10b981', transition: 'width 0.5s' }} />
+            </div>
+          </div>
         </div>
-        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>สัปดาห์นี้</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{stats?.workout_days ?? 0}/7 วัน</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', position: 'relative', zIndex: 2 }}>
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <div style={{ fontSize: 12, color: '#cbd5e1' }}>🔥 Streak ปัจจุบัน</div>
+            <div style={{ fontSize: 16, fontWeight: 'bold', color: '#f59e0b' }}>{streak} วัน</div>
+          </div>
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <div style={{ fontSize: 12, color: '#cbd5e1' }}>🏆 Longest Streak</div>
+            <div style={{ fontSize: 16, fontWeight: 'bold', color: '#38bdf8' }}>{Math.max(gameStats?.longest_streak || 0, streak)} วัน</div>
+          </div>
         </div>
       </div>
 

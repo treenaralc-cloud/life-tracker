@@ -504,3 +504,38 @@ export const fetchCalendarEvents = async (url, startDate, endDate) => {
     return []
   }
 }
+
+// ──────────────────────────────────────────
+// PHASE 3: GAMIFICATION (XP & LEVEL)
+// ──────────────────────────────────────────
+
+export const getGamificationStats = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('gamification_stats')
+    .select('*')
+    .eq('user_id', user.id)
+    .single()
+    
+  if (error && error.code === 'PGRST116') {
+    // Record not found, create one
+    const newStats = { user_id: user.id, total_xp: 0, current_level: 1, current_streak: 0, longest_streak: 0 }
+    await supabase.from('gamification_stats').insert(newStats)
+    return newStats
+  }
+  return data
+}
+
+export const addXp = async (amount) => {
+  const stats = await getGamificationStats()
+  const newXp = stats.total_xp + amount
+  const newLevel = Math.floor(newXp / 100) + 1
+  
+  const { error } = await supabase
+    .from('gamification_stats')
+    .update({ total_xp: newXp, current_level: newLevel })
+    .eq('id', stats.id)
+    
+  if (error) throw error
+  return { newXp, newLevel, leveledUp: newLevel > stats.current_level }
+}
