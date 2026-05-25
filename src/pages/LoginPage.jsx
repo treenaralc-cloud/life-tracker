@@ -42,11 +42,8 @@ export default function LoginPage() {
         </div>
 
         <div className="login-tabs">
-          <button className={`login-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => { setTab('login'); setError(''); setSuccess('') }}>
-            เข้าสู่ระบบ
-          </button>
-          <button className={`login-tab ${tab === 'signup' ? 'active' : ''}`} onClick={() => { setTab('signup'); setError(''); setSuccess('') }}>
-            สมัครสมาชิก
+          <button className="login-tab active">
+            เข้าสู่ระบบ (Personal Use Only)
           </button>
         </div>
 
