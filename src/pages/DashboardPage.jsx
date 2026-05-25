@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs } from '../utils/db'
+import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus } from '../utils/db'
 import { format } from 'date-fns'
 import { th } from 'date-fns/locale'
+import QuickLogModal from '../components/QuickLogModal'
 
 const CATS = [
   { key: 'workout', icon: '🏋️', label: 'เวทเทรนนิ่ง', color: '#38bdf8', unit: 'วัน' },
@@ -40,6 +41,8 @@ export default function DashboardPage() {
   const [streak, setStreak] = useState(0)
   const [chartData, setChartData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [agendaTasks, setAgendaTasks] = useState([])
+  const [selectedTask, setSelectedTask] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -48,16 +51,43 @@ export default function DashboardPage() {
 
   async function loadData() {
     try {
-      const [s, str, workouts, cardio, golf, study] = await Promise.all([
+      const todayStr = format(new Date(), 'yyyy-MM-dd')
+      const todayDayOfWeek = new Date().getDay()
+
+      const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff] = await Promise.all([
         getWeeklyStats(),
         getStreak(),
         getWorkoutSessions(7),
         getCardioLogs(7),
         getGolfLogs(7),
         getStudyLogs(7),
+        getRoutines(),
+        getScheduleLogs(todayStr, todayStr),
+        getOneOffTasksByDateRange(todayStr, todayStr)
       ])
       setStats(s)
       setStreak(str)
+
+      // Build Agenda Tasks
+      const scheduled = fetchedRoutines.filter(r => {
+        if (!r.is_active) return false
+        if (!r.days_of_week.includes(todayDayOfWeek)) return false
+        if (r.date_start && todayStr < r.date_start) return false
+        if (r.date_end && todayStr > r.date_end) return false
+        return true
+      }).map(r => ({
+        type: 'routine',
+        routine: r,
+        log: fetchedLogs.find(l => l.routine_id === r.id && l.scheduled_date === todayStr) || null,
+        dateStr: todayStr
+      }))
+
+      const mappedOneOff = (fetchedOneOff || []).map(t => ({
+        type: 'one_off',
+        task: t,
+      }))
+
+      setAgendaTasks([...mappedOneOff, ...scheduled])
 
       // Build weekly chart (last 7 days)
       const week = []
@@ -105,6 +135,81 @@ export default function DashboardPage() {
         <p className="page-subtitle">
           {format(new Date(), 'EEEE d MMMM yyyy', { locale: th })} • สัปดาห์นี้เป็นยังไงบ้างคะ?
         </p>
+      </div>
+
+      {/* Today's Agenda */}
+      <div className="agenda-section" style={{ marginBottom: 24, background: 'var(--bg-surface)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--border-md)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            📌 ต้องทำวันนี้ (Agenda)
+          </h2>
+        </div>
+
+        <form 
+          onSubmit={async (e) => {
+            e.preventDefault()
+            const title = e.target.elements.taskTitle.value.trim()
+            if (!title) return
+            e.target.elements.taskTitle.value = ''
+            await import('../utils/db').then(m => m.addOneOffTask({ title, task_date: format(new Date(), 'yyyy-MM-dd') }))
+            loadData()
+          }}
+          style={{ display: 'flex', gap: 8, marginBottom: 16 }}
+        >
+          <input 
+            name="taskTitle"
+            className="form-input" 
+            placeholder="เพิ่มงานพิเศษวันนี้ เช่น ไปหาหมอ..." 
+            style={{ flex: 1, padding: '8px 12px', fontSize: 14 }}
+            autoComplete="off"
+          />
+          <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px' }}>+</button>
+        </form>
+
+        {agendaTasks.length === 0 ? (
+          <div style={{ color: 'var(--text-3)', fontSize: 14 }}>วันนี้ไม่มีตารางกิจกรรมพักผ่อนได้เต็มที่เลยค่ะ! 🌸</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {agendaTasks.map((item, idx) => {
+              if (item.type === 'routine') {
+                const isDone = item.log?.status === 'done'
+                return (
+                  <div key={idx} 
+                    onClick={() => setSelectedTask(item)}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', padding: 12, borderRadius: 8, cursor: 'pointer',
+                      opacity: isDone ? 0.6 : 1, borderLeft: `4px solid ${item.routine.color || 'blue'}`
+                    }}>
+                    <div style={{ fontSize: 20 }}>{CATS.find(c => c.key === item.routine.category)?.icon || '📅'}</div>
+                    <div style={{ flex: 1, fontSize: 15, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none' }}>{item.routine.name}</div>
+                    {isDone ? <div style={{ color: '#22c55e' }}>✓ ทำแล้ว</div> : <div style={{ fontSize: 12, color: 'var(--accent)' }}>กดเพื่อบันทึก</div>}
+                  </div>
+                )
+              } else {
+                const isDone = item.task.status === 'done'
+                return (
+                  <div key={idx} 
+                    onClick={async () => {
+                      const newStatus = isDone ? 'pending' : 'done'
+                      await updateOneOffTaskStatus(item.task.id, newStatus)
+                      loadData()
+                    }}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', padding: 12, borderRadius: 8, cursor: 'pointer',
+                      opacity: isDone ? 0.6 : 1, borderLeft: `4px solid #a855f7`
+                    }}>
+                    <div style={{ fontSize: 20 }}>📝</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none' }}>{item.task.title}</div>
+                      {item.task.task_time && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>⏰ {item.task.task_time.substring(0,5)}</div>}
+                    </div>
+                    {isDone ? <div style={{ color: '#22c55e', fontSize: 14 }}>✓ ทำแล้ว</div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--border-md)' }} />}
+                  </div>
+                )
+              }
+            })}
+          </div>
+        )}
       </div>
 
       {/* Streak Banner */}
@@ -170,6 +275,17 @@ export default function DashboardPage() {
           📊 ดูกราฟ
         </button>
       </div>
+
+      {selectedTask && (
+        <QuickLogModal 
+          task={selectedTask} 
+          onClose={() => setSelectedTask(null)}
+          onUpdate={() => {
+            loadData()
+            setSelectedTask(null)
+          }}
+        />
+      )}
     </div>
   )
 }

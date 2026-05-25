@@ -431,3 +431,47 @@ export const upsertExerciseInLibrary = async (exercise_name, muscle_group, last_
   }
 }
 
+// ──────────────────────────────────────────
+// PHASE 3: ONE-OFF TASKS
+// ──────────────────────────────────────────
+
+export const addOneOffTask = async (task) => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('one_off_tasks')
+    .insert({ user_id: user.id, ...task })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export const getOneOffTasksByDateRange = async (startDate, endDate) => {
+  const { data, error } = await supabase
+    .from('one_off_tasks')
+    .select('*')
+    .gte('task_date', startDate)
+    .lte('task_date', endDate)
+    .order('task_time', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export const updateOneOffTaskStatus = async (id, status, quick_note = null) => {
+  const { error } = await supabase
+    .from('one_off_tasks')
+    .update({ 
+      status, 
+      quick_note, 
+      completed_at: status === 'done' ? new Date().toISOString() : null 
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export const deleteOneOffTask = async (id) => {
+  const { error } = await supabase
+    .from('one_off_tasks')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
