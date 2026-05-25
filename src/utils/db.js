@@ -519,7 +519,7 @@ export const getGamificationStats = async () => {
     
   if (error && error.code === 'PGRST116') {
     // Record not found, create one
-    const newStats = { user_id: user.id, total_xp: 0, current_level: 1, current_streak: 0, longest_streak: 0 }
+    const newStats = { user_id: user.id, xp_points: 0, current_level: 1, current_streak: 0, longest_streak: 0 }
     await supabase.from('gamification_stats').insert(newStats)
     return newStats
   }
@@ -528,12 +528,12 @@ export const getGamificationStats = async () => {
 
 export const addXp = async (amount) => {
   const stats = await getGamificationStats()
-  const newXp = stats.total_xp + amount
+  const newXp = (stats.xp_points || 0) + amount
   const newLevel = Math.floor(newXp / 100) + 1
   
   const { error } = await supabase
     .from('gamification_stats')
-    .update({ total_xp: newXp, current_level: newLevel })
+    .update({ xp_points: newXp, current_level: newLevel })
     .eq('id', stats.id)
     
   if (error) throw error

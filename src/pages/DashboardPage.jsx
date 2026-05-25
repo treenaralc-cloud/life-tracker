@@ -274,10 +274,10 @@ export default function DashboardPage() {
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 }}>
               <div style={{ fontWeight: 'bold', fontSize: 16, color: '#fff' }}>ผู้เล่น: บอส</div>
-              <div style={{ fontSize: 12, color: '#cbd5e1' }}>{gameStats?.total_xp || 0} / {((gameStats?.current_level || 1)) * 100} XP</div>
+              <div style={{ fontSize: 12, color: '#cbd5e1' }}>{gameStats?.xp_points || 0} / {((gameStats?.current_level || 1)) * 100} XP</div>
             </div>
             <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ width: `${((gameStats?.total_xp || 0) % 100)}%`, height: '100%', background: '#10b981', transition: 'width 0.5s' }} />
+              <div style={{ width: `${((gameStats?.xp_points || 0) % 100)}%`, height: '100%', background: '#10b981', transition: 'width 0.5s' }} />
             </div>
           </div>
         </div>
