@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus } from '../utils/db'
+import { getWeeklyStats, getStreak, getWorkoutSessions, getCardioLogs, getGolfLogs, getStudyLogs, getRoutines, getScheduleLogs, getOneOffTasksByDateRange, updateOneOffTaskStatus, getIcalUrl, fetchCalendarEvents } from '../utils/db'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays } from 'date-fns'
 import { th } from 'date-fns/locale'
 import QuickLogModal from '../components/QuickLogModal'
 import AddEventModal from '../components/AddEventModal'
+import SettingsModal from '../components/SettingsModal'
 
 const CATS = [
   { key: 'workout', icon: '🏋️', label: 'เวทเทรนนิ่ง', color: '#38bdf8', unit: 'วัน' },
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function DashboardPage() {
       const selectedStr = format(selectedDate, 'yyyy-MM-dd')
       const selectedDayOfWeek = selectedDate.getDay()
 
-      const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff] = await Promise.all([
+      const [s, str, workouts, cardio, golf, study, fetchedRoutines, fetchedLogs, fetchedOneOff, icalUrl] = await Promise.all([
         getWeeklyStats(),
         getStreak(),
         getWorkoutSessions(7),
@@ -66,8 +68,12 @@ export default function DashboardPage() {
         getStudyLogs(7),
         getRoutines(),
         getScheduleLogs(selectedStr, selectedStr),
-        getOneOffTasksByDateRange(selectedStr, selectedStr)
+        getOneOffTasksByDateRange(selectedStr, selectedStr),
+        getIcalUrl()
       ])
+      
+      const calEvents = await fetchCalendarEvents(icalUrl, selectedStr, selectedStr)
+      
       setStats(s)
       setStreak(str)
 
@@ -90,7 +96,12 @@ export default function DashboardPage() {
         task: t,
       }))
 
-      setAgendaTasks([...mappedOneOff, ...scheduled])
+      const mappedCal = calEvents.map(e => ({
+        type: 'calendar',
+        event: e
+      }))
+
+      setAgendaTasks([...mappedCal, ...mappedOneOff, ...scheduled])
 
       // Build weekly chart (last 7 days)
       const week = []
@@ -133,11 +144,14 @@ export default function DashboardPage() {
   return (
     <div className="animate-in">
       {/* Header */}
-      <div className="page-header">
-        <h1 className="page-title">{getGreeting()}</h1>
-        <p className="page-subtitle">
-          {format(new Date(), 'EEEE d MMMM yyyy', { locale: th })} • สัปดาห์นี้เป็นยังไงบ้างคะ?
-        </p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 className="page-title">{getGreeting()}</h1>
+          <p className="page-subtitle">
+            {format(new Date(), 'EEEE d MMMM yyyy', { locale: th })} • สัปดาห์นี้เป็นยังไงบ้างคะ?
+          </p>
+        </div>
+        <button className="btn btn-ghost" style={{ fontSize: 24, padding: 8 }} onClick={() => setShowSettingsModal(true)}>⚙️</button>
       </div>
 
       {/* Today's Agenda */}
@@ -200,6 +214,21 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 20 }}>{CATS.find(c => c.key === item.routine.category)?.icon || '📅'}</div>
                     <div style={{ flex: 1, fontSize: 15, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none' }}>{item.routine.name}</div>
                     {isDone ? <div style={{ color: '#22c55e' }}>✓ ทำแล้ว</div> : <div style={{ fontSize: 12, color: 'var(--accent)' }}>กดเพื่อบันทึก</div>}
+                  </div>
+                )
+              } else if (item.type === 'calendar') {
+                return (
+                  <div key={idx} 
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', padding: 12, borderRadius: 8,
+                      borderLeft: `4px solid #3b82f6`
+                    }}>
+                    <div style={{ fontSize: 20 }}>🗓️</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 500 }}>{item.event.title}</div>
+                      {!item.event.isAllDay && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>⏰ {format(new Date(item.event.start), 'HH:mm')} - {format(new Date(item.event.end), 'HH:mm')}</div>}
+                      {item.event.isAllDay && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>⏰ ตลอดวัน</div>}
+                    </div>
                   </div>
                 )
               } else {
@@ -310,6 +339,16 @@ export default function DashboardPage() {
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             setShowAddModal(false)
+            loadData()
+          }}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal 
+          onClose={() => setShowSettingsModal(false)}
+          onSaved={() => {
+            setShowSettingsModal(false)
             loadData()
           }}
         />

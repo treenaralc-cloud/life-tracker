@@ -475,3 +475,32 @@ export const deleteOneOffTask = async (id) => {
     .eq('id', id)
   if (error) throw error
 }
+
+// ──────────────────────────────────────────
+// PHASE 3: SETTINGS (iCal)
+// ──────────────────────────────────────────
+
+export const saveIcalUrl = async (url) => {
+  const { error } = await supabase.auth.updateUser({
+    data: { ical_url: url }
+  })
+  if (error) throw error
+}
+
+export const getIcalUrl = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  return user?.user_metadata?.ical_url || null
+}
+
+export const fetchCalendarEvents = async (url, startDate, endDate) => {
+  if (!url) return []
+  try {
+    const res = await fetch(`/api/calendar?url=${encodeURIComponent(url)}&start=${startDate}&end=${endDate}`)
+    if (!res.ok) throw new Error('Failed to fetch calendar')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error(err)
+    return []
+  }
+}
